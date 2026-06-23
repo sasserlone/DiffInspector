@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# 🤖 Code Review Agent – Wrapper-Script
+# Nutzung: ./code-review-agent health
+# Oder:   ./code-review-agent diff changes.diff
+
+set -euo pipefail
+
+# Löse Symlink auf, falls vorhanden (z.B. bei Symlink in /usr/local/bin)
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+    DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+    SOURCE="$(readlink "$SOURCE")"
+    [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+export PYTHONPATH="${DIR}:${PYTHONPATH:-}"
+exec python3 "$DIR/src/main.py" "$@"
