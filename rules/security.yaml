@@ -1,0 +1,64 @@
+# ──────────────────────────────────────────────
+# Security-Regelwerk für Code-Reviews
+# ──────────────────────────────────────────────
+
+rules:
+  - id: "SEC-001"
+    severity: "error"
+    category: "security"
+    pattern: "Hartcodierte Secrets/API-Keys/Passwörter"
+    message: "Hartcodierte Secrets wurden erkannt. Verwende Umgebungsvariablen oder einen Secrets-Manager."
+
+  - id: "SEC-002"
+    severity: "error"
+    category: "security"
+    pattern: "SQL-Injection-Gefahr (String-Interpolation in SQL-Queries)"
+    message: "SQL-Query wird per String-Interpolation gebaut. Verwende parametrisierte Queries oder ein ORM."
+
+  - id: "SEC-003"
+    severity: "error"
+    category: "security"
+    pattern: "command injection risk (os.system, subprocess with shell=True)"
+    message: "Dieser Aufruf ist anfällig für Command Injection. Vermeide shell=True oder verwende shlex.quote()."
+
+  - id: "SEC-004"
+    severity: "error"
+    category: "security"
+    pattern: "Path Traversal (user input in file paths)"
+    message: "Dateipfade aus Benutzereingaben können zu Path-Traversal-Angriffen führen. Validiere den Pfad."
+
+  - id: "SEC-005"
+    severity: "error"
+    category: "security"
+    pattern: "Unsichere Verwendung von eval/exec/pickle"
+    message: "eval/exec/pickle können beliebigen Code ausführen. Verwende sicherere Alternativen."
+
+  - id: "SEC-006"
+    severity: "warning"
+    category: "security"
+    pattern: "CSRF-Schutz fehlt oder deaktiviert"
+    message: "Dieser Endpunkt hat keinen CSRF-Schutz. Füge CSRF-Token-Validierung hinzu."
+
+  - id: "SEC-007"
+    severity: "warning"
+    category: "security"
+    pattern: "Fehlende Input-Validierung"
+    message: "Benutzereingaben sollten validiert werden (Typ, Länge, Format, Wertebereich)."
+
+  - id: "SEC-008"
+    severity: "warning"
+    category: "security"
+    pattern: "Schwache Kryptografie (md5, sha1, DES, RC4)"
+    message: "Verwende moderne kryptografische Algorithmen (SHA-256/512, AES-GCM, bcrypt/argon2)."
+
+  - id: "SEC-009"
+    severity: "error"
+    category: "security"
+    pattern: "Unsichere Session-Handhabung"
+    message: "Sessions sollten mit HTTPS, HttpOnly und Secure-Flags ausgestattet sein."
+
+  - id: "SEC-010"
+    severity: "warning"
+    category: "security"
+    pattern: "Fehlende Rate-Limiting / fehlende Auth-Checks"
+    message: "Dieser Endpunkt hat kein erkennbares Rate-Limiting oder fehlende Authentifizierungsprüfung."

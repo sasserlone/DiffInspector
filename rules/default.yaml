@@ -1,0 +1,106 @@
+# ──────────────────────────────────────────────
+# Standard-Regelwerk für Code-Reviews
+# ──────────────────────────────────────────────
+# Jede Regel hat:
+#   id:        Eindeutige ID
+#   severity:  error | warning | info
+#   category:  style | bug | security | performance | maintainability
+#   pattern:   Beschreibung, worauf das LLM achten soll
+#   message:   Standard-Nachricht bei Fund
+
+rules:
+  - id: "STYLE-001"
+    severity: "info"
+    category: "style"
+    pattern: "Zu lange Zeilen (>100 Zeichen)"
+    message: "Diese Zeile ist sehr lang. Erwäge eine Aufteilung zur besseren Lesbarkeit."
+
+  - id: "STYLE-002"
+    severity: "info"
+    category: "style"
+    pattern: "Inkonsistente Benennung (camelCase vs snake_case)"
+    message: "Inkonsistente Namenskonvention im Projekt. Bitte einheitliche Benennung verwenden."
+
+  - id: "STYLE-003"
+    severity: "warning"
+    category: "style"
+    pattern: "Fehlende oder unzureichende Typannotationen"
+    message: "Diese Funktion/Methode hat keine Typannotationen. Typannotationen verbessern die Lesbarkeit und ermöglichen statische Analyse."
+
+  - id: "STYLE-004"
+    severity: "info"
+    category: "style"
+    pattern: "Komplexe einzeilige Ausdrücke"
+    message: "Erwäge, diesen Ausdruck in mehrere Zeilen aufzuteilen, um die Lesbarkeit zu erhöhen."
+
+  - id: "BUG-001"
+    severity: "error"
+    category: "bug"
+    pattern: "Möglicher off-by-one-Fehler in Schleifen oder Indizes"
+    message: "Möglicher off-by-one-Fehler. Überprüfe die Schleifen- oder Indexgrenzen."
+
+  - id: "BUG-002"
+    severity: "error"
+    category: "bug"
+    pattern: "Unbehandelte Ausnahmen oder leere except-Blöcke"
+    message: "Dieser except-Block ist leer oder zu allgemein. Spezifiziere die zu erwartenden Ausnahmen."
+
+  - id: "BUG-003"
+    severity: "error"
+    category: "bug"
+    pattern: "Mutable Default-Argumente (Python: [] oder {} als Default)"
+    message: "Mutable Default-Argumente werden nur einmal initialisiert. Verwende stattdessen None."
+
+  - id: "BUG-004"
+    severity: "warning"
+    category: "bug"
+    pattern: "Mögliche Race Conditions oder fehlende Locks"
+    message: "Hier fehlt möglicherweise ein Lock für die Thread-Sicherheit."
+
+  - id: "BUG-005"
+    severity: "error"
+    category: "bug"
+    pattern: "Vergleich mit None über == statt 'is'"
+    message: "Verwende 'is None' / 'is not None' statt '== None' / '!= None'."
+
+  - id: "PERF-001"
+    severity: "warning"
+    category: "performance"
+    pattern: "Ineffiziente Schleifen (z.B. Liste statt Generator)"
+    message: "Diese Schleife erstellt eine unnötige Liste. Erwäge einen Generator-Ausdruck für bessere Performance."
+
+  - id: "PERF-002"
+    severity: "warning"
+    category: "performance"
+    pattern: "Wiederholte teure Operationen in Schleifen"
+    message: "Diese teure Operation wird in jeder Iteration ausgeführt. Ziehe sie vor die Schleife."
+
+  - id: "PERF-003"
+    severity: "info"
+    category: "performance"
+    pattern: "Ineffiziente String-Verkettung in Schleifen"
+    message: "String-Verkettung in Schleifen ist ineffizient. Verwende join() oder eine Liste."
+
+  - id: "MAINT-001"
+    severity: "info"
+    category: "maintainability"
+    pattern: "Komplexe Funktion mit zu vielen Verantwortlichkeiten"
+    message: "Diese Funktion scheint zu viele Aufgaben zu erledigen. Erwäge Aufteilung in kleinere Funktionen."
+
+  - id: "MAINT-002"
+    severity: "warning"
+    category: "maintainability"
+    pattern: "Magische Zahlen oder Strings ohne benannte Konstanten"
+    message: "Verwende eine benannte Konstante für diesen Wert, um die Wartbarkeit zu verbessern."
+
+  - id: "MAINT-003"
+    severity: "info"
+    category: "maintainability"
+    pattern: "Fehlende Dokumentation (Docstrings) bei öffentlichen Funktionen/Klassen"
+    message: "Öffentliche Funktionen/Klassen sollten Docstrings haben."
+
+  - id: "MAINT-004"
+    severity: "info"
+    category: "maintainability"
+    pattern: "Tiefe Verschachtelung (>3 Ebenen)"
+    message: "Die Verschachtelungstiefe ist hoch. Erwäge Early Returns oder Extraktion in Hilfsfunktionen."

@@ -1,0 +1,46 @@
+# ──────────────────────────────────────────────
+# Code Review Agent – Konfiguration
+# ──────────────────────────────────────────────
+
+ollama:
+  base_url: "http://localhost:11434"
+  model: "codellama:7b"            # Alternative: "llama3:8b", "deepseek-coder:6.7b", "mistral:7b"
+  temperature: 0.2
+  max_tokens: 2048
+  timeout: 120                     # Sekunden
+  num_ctx: 8192                    # Kontextfenster
+
+review:
+  # Maximalgröße eines Diffs in Zeilen – größere Diffs werden chunked
+  max_diff_lines: 500
+  # Pro Chunk zu reviewende Zeilen
+  chunk_size: 200
+  # Parallelität (0 = sequenziell)
+  parallel_chunks: 0
+  # Label für Inline-Kommentare
+  comment_label: "🤖 AI Review"
+  # Pfad zur Output-Datei (wenn --output gesetzt)
+  output_dir: "./reports"
+
+rules:
+  enabled: true
+  rules_dir: "./rules"
+  # Standard-Regelwerke
+  profiles:
+    default:
+      - "default.yaml"
+      - "security.yaml"
+    security:
+      - "security.yaml"
+    minimal:
+      - "default.yaml"
+
+git:
+  # Aus welchem Remote sollen PR-Infos geholt werden?
+  remote: "origin"
+  # Temporäres Verzeichnis fürge Klone
+  work_dir: "/tmp/code-review-agent"
+
+logging:
+  level: "INFO"   # DEBUG | INFO | WARNING | ERROR
+  format: "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
