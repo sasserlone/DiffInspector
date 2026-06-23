@@ -3,7 +3,7 @@
 # ──────────────────────────────────────────────
 
 ollama:
-  base_url: "http://localhost:11434"
+  base_url: "http://host.docker.internal:11434"
   model: "codellama:7b"            # Alternative: "llama3:8b", "deepseek-coder:6.7b", "mistral:7b"
   temperature: 0.2
   max_tokens: 2048

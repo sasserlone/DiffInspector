@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 
 class OllamaConfig(BaseModel):
-    base_url: str = "http://localhost:11434"
+    base_url: str = "http://localhost:11434"  # WSL: http://host.docker.internal:11434
     model: str = "codellama:7b"
     temperature: float = 0.2
     max_tokens: int = 2048

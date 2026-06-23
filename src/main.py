@@ -90,7 +90,7 @@ def health(ctx: click.Context) -> None:
         )
         sys.exit(1)
 
-    console.print(f"\nKonfiguration: [blue]{cfg.dict()}[/blue]")
+    console.print(f"\nKonfiguration: [blue]{cfg.model_dump()}[/blue]")
 
 
 @cli.command()
