@@ -10,13 +10,20 @@ import yaml
 from pydantic import BaseModel, Field
 
 
-class OllamaConfig(BaseModel):
+class LLMConfig(BaseModel):
+    provider: str = "ollama"  # ollama | openai (deepseek, openai, etc.)
+    # Ollama
     base_url: str = "http://localhost:11434"  # WSL: http://host.docker.internal:11434
     model: str = "codellama:7b"
+    # OpenAI-kompatibel (DeepSeek, OpenAI, etc.)
+    api_key: str = ""
+    api_base_url: str = "https://api.deepseek.com"
+    api_model: str = "deepseek-chat"
+    # Gemeinsam
     temperature: float = 0.2
-    max_tokens: int = 2048
+    max_tokens: int = 3000
     timeout: int = 120
-    num_ctx: int = 8192
+    num_ctx: int = 4096
 
 
 class ReviewConfig(BaseModel):
@@ -50,7 +57,7 @@ class LoggingConfig(BaseModel):
 
 
 class AppConfig(BaseModel):
-    ollama: OllamaConfig = OllamaConfig()
+    ollama: LLMConfig = LLMConfig()
     review: ReviewConfig = ReviewConfig()
     rules: RulesConfig = RulesConfig()
     git: GitConfig = GitConfig()
@@ -114,9 +121,13 @@ class AppConfig(BaseModel):
     def _apply_env_overrides(cls, cfg: AppConfig) -> AppConfig:
         """Umgebungsvariablen überschreiben YAML-Werte."""
         mappings = {
+            "CRA_LLM_PROVIDER": ("ollama", "provider"),
             "CRA_OLLAMA_BASE_URL": ("ollama", "base_url"),
             "CRA_OLLAMA_MODEL": ("ollama", "model"),
             "CRA_OLLAMA_TEMPERATURE": ("ollama", "temperature"),
+            "CRA_API_KEY": ("ollama", "api_key"),
+            "CRA_API_BASE_URL": ("ollama", "api_base_url"),
+            "CRA_API_MODEL": ("ollama", "api_model"),
             "CRA_REVIEW_MAX_DIFF_LINES": ("review", "max_diff_lines"),
             "CRA_REVIEW_CHUNK_SIZE": ("review", "chunk_size"),
             "CRA_REVIEW_PARALLEL_CHUNKS": ("review", "parallel_chunks"),

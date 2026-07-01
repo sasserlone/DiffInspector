@@ -81,12 +81,17 @@ class GitLabProvider(GitProvider):
         posted = 0
         for c in comments:
             try:
+                if not c.file_path or c.line is None:
+                    merge_request.notes.create({"body": c.body})
+                    posted += 1
+                    continue
+
                 merge_request.discussions.create({
                     "body": c.body,
                     "position": {
                         "position_type": "text",
                         "new_path": c.file_path,
-                        "new_line": c.line or 1,
+                        "new_line": c.line,
                         "base_sha": merge_request.diff_refs["base_sha"],
                         "start_sha": merge_request.diff_refs["start_sha"],
                         "head_sha": merge_request.diff_refs["head_sha"],

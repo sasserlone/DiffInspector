@@ -1,4 +1,4 @@
-<# Byte-compiled / optimized / DLL files
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
 *$py.class
@@ -127,3 +127,7 @@ Thumbs.db
 # Code Review Agent Berichte
 reports/
 *.log
+
+# API-Keys / Secrets
+.env
+.env.local

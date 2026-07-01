@@ -3,12 +3,19 @@
 # ──────────────────────────────────────────────
 
 ollama:
+  provider: "deepseek"               # ollama | deepseek
+  # Ollama (nur wenn provider: ollama)
   base_url: "http://host.docker.internal:11434"
-  model: "codellama:7b"            # Alternative: "llama3:8b", "deepseek-coder:6.7b", "mistral:7b"
+  model: "codellama:7b"
+  # OpenAI-kompatibel (DeepSeek, OpenAI)
+  api_key: ""                         # Oder via CRA_API_KEY env
+  api_base_url: "https://api.deepseek.com"
+  api_model: "deepseek-chat"
+  # Gemeinsam
   temperature: 0.2
-  max_tokens: 2048
-  timeout: 120                     # Sekunden
-  num_ctx: 8192                    # Kontextfenster
+  max_tokens: 300
+  timeout: 120
+  num_ctx: 4096                    # Kontextfenster
 
 review:
   # Maximalgröße eines Diffs in Zeilen – größere Diffs werden chunked

@@ -68,29 +68,39 @@ def cli(ctx: click.Context, config: str | None, log_level: str | None) -> None:
 @cli.command()
 @click.pass_context
 def health(ctx: click.Context) -> None:
-    """Prüft die Ollama-Verbindung."""
+    """Prüft die LLM-Verbindung (Ollama oder DeepSeek/OpenAI)."""
     from src.llm_client import LLMClient
 
     cfg: AppConfig = ctx.obj["config"]
     llm = LLMClient(cfg.ollama)
 
-    console.print("\n[bold]🔍 Code Review Agent – Health Check[/bold]\n")
+    provider_name = cfg.ollama.provider
+    console.print(f"\n[bold]🔍 Code Review Agent – Health Check ({provider_name})[/bold]\n")
 
-    with console.status("[bold green]Prüfe Ollama-Verbindung..."):
+    with console.status(f"[bold green]Prüfe {provider_name}-Verbindung..."):
         healthy = llm.health_check()
 
     if healthy:
-        console.print(f"✅  Ollama erreichbar unter [cyan]{cfg.ollama.base_url}[/cyan]")
-        console.print(f"   Modell: [green]{cfg.ollama.model}[/green]")
+        if provider_name == "openai":
+            console.print(f"✅  [green]{cfg.ollama.api_model}[/green] erreichbar unter [cyan]{cfg.ollama.api_base_url}[/cyan]")
+        else:
+            console.print(f"✅  Ollama erreichbar unter [cyan]{cfg.ollama.base_url}[/cyan]")
+            console.print(f"   Modell: [green]{cfg.ollama.model}[/green]")
     else:
-        console.print(
-            f"❌  Keine Verbindung zu Ollama unter [red]{cfg.ollama.base_url}[/red]\n"
-            f"   Starte Ollama mit: [yellow]ollama serve[/yellow]\n"
-            f"   Installiere das Modell: [yellow]ollama pull {cfg.ollama.model}[/yellow]"
-        )
+        if provider_name == "openai":
+            console.print(
+                f"❌  Keine Verbindung zu [red]{cfg.ollama.api_base_url}[/red]\n"
+                f"   Modell: [yellow]{cfg.ollama.api_model}[/yellow]\n"
+                f"   Prüfe CRA_API_KEY oder api_key in config.yaml"
+            )
+        else:
+            console.print(
+                f"❌  Keine Verbindung zu Ollama unter [red]{cfg.ollama.base_url}[/red]\n"
+                f"   Starte Ollama mit: [yellow]ollama serve[/yellow]"
+            )
         sys.exit(1)
 
-    console.print(f"\nKonfiguration: [blue]{cfg.model_dump()}[/blue]")
+    console.print(f"\nKonfiguration: [blue]{_safe_config_dump(cfg)}[/blue]")
 
 
 @cli.command()
@@ -368,6 +378,15 @@ def _write_json_output(result, path: str) -> None:
         "findings": [f.to_dict() for f in result.findings],
     }
     Path(path).write_text(json.dumps(data, indent=2, ensure_ascii=False))
+
+
+def _safe_config_dump(cfg: AppConfig) -> dict:
+    """Gibt die Konfiguration ohne Secret-Werte zurück."""
+    data = cfg.model_dump()
+    ollama = data.get("ollama")
+    if isinstance(ollama, dict) and ollama.get("api_key"):
+        ollama["api_key"] = "***"
+    return data
 
 
 # ──────────────────────────────────────────────

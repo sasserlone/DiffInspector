@@ -5,37 +5,40 @@ from __future__ import annotations
 from src.diff_analyzer import FileDiff, Hunk
 from src.rule_engine import Rule
 
-SYSTEM_PROMPT_TEMPLATE = """Du bist ein erfahrener Senior-Entwickler, der einen sorgfältigen Code-Review durchführt.
+SYSTEM_PROMPT_TEMPLATE = """Du bist ein Senior-Entwickler im Code-Review.
 
-## Deine Aufgabe
-Analysiere den bereitgestellten Code-Diff und finde:
-1. **Fehler & Bugs** – Logische Fehler, Race Conditions, Edge Cases
-2. **Sicherheitslücken** – Injection, Secrets, unsichere API-Nutzung
-3. **Performance-Probleme** – Ineffiziente Algorithmen, unnötige Operationen
-4. **Wartbarkeit** – Komplexität, fehlende Dokumentation, Code-Duplikate
-5. **Code-Style** – Verstöße gegen Projekt-Konventionen
+DIFF-LESART: '-' = ALT (gelöscht), '+' = NEU (eingereichter Code).
+Kommentiere nur konkrete Probleme im NEUEN Code und nur auf Zeilen, die im Diff mit '+' hinzugefügt wurden.
 
-## Regeln für deine Antwort
-- Sei **konstruktiv und präzise**. Kein Lob für einfachen Code.
-- Jeder Kommentar muss eine **konkrete Zeile oder einen Bereich** referenzieren.
-- Gib bei jedem Fund eine **konkrete Verbesserung** als Code-Beispiel.
-- Wenn du keinen Fehler findest, sag "KEINE FINDINGS" am Ende.
-- Priorisiere **Fehler und Sicherheit** vor Style.
+Finde nur belegbare Probleme:
+1. Typos/Tippfehler – falsche Attribut-/Methodennamen (z.B. .teext statt .text)
+2. Fehler/Bugs – Logikfehler, Edge Cases, off-by-one
+3. Security – echte Secrets, Injection, unsichere API-Nutzung
+4. Performance – klar ineffizienter neuer Code
 
-## Antwortformat
-Gib deine Review-Kommentare im folgenden Format aus:
+Nicht melden:
+- Spekulationen ohne direkte Evidenz im Diff
+- "Keine Änderung nötig" oder Lob
+- reine Konfigurationspräferenzen als Race Condition, Bug oder Error
+- Style/Maintainability als error
+- Vorschläge, die `.env` per `source` als Shell-Code ausführen
 
-```
-FILE: <dateipfad>
-LINE: <zeilennummer>
+Severity-Regeln:
+- error nur für nachweisbare Runtime-Bugs, Syntaxfehler, echte Secrets oder klar gefährliche Security-Probleme
+- warning für plausible Risiken, unsichere Muster oder robuste Verbesserungen
+- info für kleine Hinweise
+- Wörter wie "könnte", "möglicherweise", "falls" dürfen nie SEVERITY: error sein
+
+## Format (EXAKT einhalten!):
+FILE: <pfad>
+LINE: <zeile>
 SEVERITY: <error|warning|info>
 CATEGORY: <bug|security|performance|maintainability|style>
-MESSAGE: <Kurzbeschreibung des Problems>
-SUGGESTION:
-```verbesserter Code```
-```
+MESSAGE: <1 Satz>
+SUGGESTION: <1-2 Zeilen Code>
 
-Trenne mehrere Funde mit "---".
+Trenne Funde mit ---. Max 3 Findings.
+Wenn alles gut ist: KEINE FINDINGS
 """
 
 
@@ -98,6 +101,16 @@ def build_file_prompt(
     parts.append(f"## Datei: {file_diff.new_path}")
     parts.append(f"Status: {file_diff.status}")
     parts.append("")
+
+    added_line_numbers = [
+        str(line_no)
+        for hunk in file_diff.hunks
+        for line_no, _ in hunk.added_lines
+    ]
+    if added_line_numbers:
+        parts.append("### Erlaubte Kommentarzeilen")
+        parts.append(", ".join(added_line_numbers))
+        parts.append("")
 
     if related_functions:
         parts.append("### Betroffene Funktionen/Klassen:")

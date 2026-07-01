@@ -82,12 +82,15 @@ class GitHubProvider(GitProvider):
         _, pr = self._get_repo_and_pr(mr)
         latest_commit = pr.get_commits().reversed[0]
 
-        # Gruppiere Kommentare als Review
         review_comments = []
+        general_comments = []
         for c in comments:
+            if not c.file_path or c.line is None:
+                general_comments.append(c.body)
+                continue
             review_comments.append({
                 "path": c.file_path,
-                "line": c.line or 1,
+                "line": c.line,
                 "body": c.body,
                 "commit_id": c.commit_id or latest_commit.sha,
                 "side": c.side,
@@ -96,10 +99,13 @@ class GitHubProvider(GitProvider):
         if review_comments:
             pr.create_review(
                 commit=latest_commit,
-                body="🤖 **AI Code Review** – Automatisch generierte Review-Kommentare.",
+                body="\n\n---\n\n".join(general_comments)
+                or "🤖 **AI Code Review** – Automatisch generierte Review-Kommentare.",
                 event="COMMENT",
                 comments=review_comments,
             )
+        elif general_comments:
+            pr.create_issue_comment("\n\n---\n\n".join(general_comments))
 
         logger.info("%d Kommentare an PR #%s gesendet", len(comments), mr.id)
         return len(comments)

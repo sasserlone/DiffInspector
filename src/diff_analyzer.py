@@ -133,11 +133,21 @@ class DiffParser:
 
         current_file: FileDiff | None = None
         current_hunk: Hunk | None = None
+        # Mutable-Container für Closure: clear/append statt Neu-Zuweisung
+        raw_lines: list[str] = []
+
+        def flush_raw() -> None:
+            if current_file is not None:
+                current_file.raw_diff = "\n".join(raw_lines)
 
         for line in lines:
             # Dateikopf
             file_match = FILE_HEADER_RE.match(line)
             if file_match:
+                flush_raw()
+                raw_lines.clear()
+                raw_lines.append(line)
+
                 current_hunk = None
                 old_path = file_match.group(1) or file_match.group(3) or ""
                 new_path = file_match.group(2) or file_match.group(3) or ""
@@ -151,6 +161,8 @@ class DiffParser:
 
             if current_file is None:
                 continue
+
+            raw_lines.append(line)
 
             # Datei-Status erkennen
             if line.startswith("new file mode"):
@@ -203,7 +215,8 @@ class DiffParser:
             if current_hunk is not None:
                 current_hunk.lines.append(line)
 
-        # Summary generieren
+        # Letzte Datei finalisieren + Summary
+        flush_raw()
         result.summary = self._generate_summary(result)
         return result
 

@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-# Löse Symlink auf, falls vorhanden (z.B. bei Symlink in /usr/local/bin)
+# Löse Symlink auf
 SOURCE="${BASH_SOURCE[0]}"
 while [ -h "$SOURCE" ]; do
     DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
@@ -13,5 +13,25 @@ while [ -h "$SOURCE" ]; do
     [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
 done
 DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+
+# .env laden falls vorhanden
+ENV_FILE="$DIR/.env"
+if [ -f "$ENV_FILE" ]; then
+    while IFS='=' read -r key value; do
+        key="${key#"${key%%[![:space:]]*}"}"
+        key="${key%"${key##*[![:space:]]}"}"
+        [[ -z "$key" || "$key" == \#* ]] && continue
+        [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+
+        value="${value#"${value%%[![:space:]]*}"}"
+        value="${value%"${value##*[![:space:]]}"}"
+        value="${value%\"}"
+        value="${value#\"}"
+        value="${value%\'}"
+        value="${value#\'}"
+        export "$key=$value"
+    done < "$ENV_FILE"
+fi
+
 export PYTHONPATH="${DIR}:${PYTHONPATH:-}"
 exec python3 "$DIR/src/main.py" "$@"

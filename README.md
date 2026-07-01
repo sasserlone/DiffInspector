@@ -1,430 +1,342 @@
-# 🤖 Code Review Agent
+# Code Review Agent
 
-**Automatisiertes Code-Review mit lokalem Ollama-LLM, Git-Integration und konfigurierbarem Regelwerk.**
+Ein pragmatischer Code-Review-Agent fuer lokale Diffs, Branch-Vergleiche und PR/MR-Reviews. Der Agent kombiniert Git-Diff-Parsing, Kontextsammlung, ein LLM und eine nachgelagerte Rule Engine, damit aus frei formulierten Modellantworten moeglichst wenige, konkrete Review-Findings entstehen.
 
-> Review von Pull Requests, Merge Requests oder lokalen Diffs – vollständig offline und ohne externe API-Kosten.
+Der Agent ist kein deterministischer Compiler und kein Ersatz fuer Tests. Er ist ein Assistenzwerkzeug: hilfreich fuer erste Hinweise, aber bewusst mit Validierung, Deduplizierung und konservativer Severity-Kalibrierung gebaut.
 
----
+## Architektur
 
-## 📋 Architektur
-
-```
-GitLab/GitHub PR
-      │
-Webhook / Pipeline Job / CLI
-      │
-Review Orchestrator ──── Diff Analyzer ──── Context Retriever
-      │                                               │
-      ├──── Ollama LLM (lokal, z.B. CodeLlama) ───────┘
-      │
+```text
+Git diff / GitHub PR / GitLab MR
+        |
+        v
+Review Orchestrator
+        |
+        +--> Diff Analyzer
+        +--> Context Retriever
+        +--> LLM Client (Ollama oder OpenAI-kompatible API)
+        |
+        v
+Response Parser
+        |
+        v
 Rule Engine / Validator
-      │
-Review Comments zurück in PR / Ausgabe auf Konsole
+        |
+        v
+Konsole / JSON / PR-MR-Kommentare
 ```
 
-### Komponenten
+## Aktueller Stand
 
-| Komponente | Aufgabe |
-|---|---|
-| **Diff Analyzer** | Parst rohe Git-Diffs in strukturierte Daten (Hunks, Zeilen, Status) |
-| **Context Retriever** | Holt Dateikontext, betroffene Funktionen, verwandte Dateien |
-| **LLM Client** | Kommuniziert mit lokalem Ollama-Server |
-| **Rule Engine** | Lädt Regelwerke, validiert und dedupliziert Findings |
-| **Git Provider** | Abstraktion für GitHub, GitLab, lokales Git |
-| **Review Orchestrator** | Steuert den gesamten Ablauf |
-| **Webhook Server** | FastAPI-Server für eingehende PR/MR-Events |
+Der Prototyp unterstuetzt:
 
----
+- Review des lokalen Working Trees
+- Review einer Diff-Datei
+- Branch-Vergleich
+- GitHub- und GitLab-Provider
+- optionalen FastAPI-Webhook-Server
+- Ollama oder OpenAI-kompatible Chat-Completion-APIs
+- Parsing von LLM-Antworten im `FILE/LINE/SEVERITY/CATEGORY/MESSAGE/SUGGESTION`-Format
+- Validierung gegen geaenderte Diff-Zeilen
+- Herunterstufung spekulativer Findings
+- Blockieren unsicherer Vorschlaege wie `source .env`
+- Redaction von API-Keys in der Health-Ausgabe
 
-## 🚀 Schnellstart
+Wichtig: LLM-Ergebnisse koennen zwischen zwei Laeufen variieren. Der Validator reduziert Rauschen, garantiert aber keine identischen Ergebnisse.
 
-### 1. Voraussetzungen
-
-- **Python 3.10+**
-- **Ollama** (lokal installiert und gestartet: `ollama serve`)
-- **Ein LLM-Modell** in Ollama, z.B.:
+## Installation
 
 ```bash
-ollama pull codellama:7b        # Empfohlen für Code-Review
-# Alternativen:
-ollama pull deepseek-coder:6.7b
-ollama pull llama3:8b
-ollama pull mistral:7b
-```
-
-### 2. Installation
-
-```bash
-# Repository klonen
-cd code-review-agent
-
-# Virtuelle Umgebung (optional)
-python -m venv venv
-source venv/bin/activate
-
-# Installation (lokal)
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -e .
+```
 
-# Mit GitHub/GitLab-Support
+Mit optionalen Integrationen:
+
+```bash
+pip install -e ".[github]"
+pip install -e ".[gitlab]"
+pip install -e ".[webhook]"
 pip install -e ".[all]"
-
-# Oder selektiv:
-pip install -e ".[github]"      # Nur GitHub
-pip install -e ".[webhook]"     # Nur Webhook-Server
 ```
 
-### 3. Konfiguration
-
-Die Konfiguration erfolgt über `config.yaml` (siehe Beispiel) oder Umgebungsvariablen:
+Alternativ kann der lokale Wrapper verwendet werden:
 
 ```bash
-# Minimal-Konfiguration per env
-export CRA_OLLAMA_MODEL="codellama:7b"
-export GITHUB_TOKEN="ghp_..."
-export GITLAB_TOKEN="glpat-..."
+./code-review-agent health
+./code-review-agent diff
 ```
 
-### 4. Health-Check
+Der Wrapper liest eine lokale `.env` als einfache `KEY=VALUE`-Datei ein. Die Datei wird nicht als Shell-Skript ausgefuehrt.
 
-```bash
-code-review-agent health
-```
+## Konfiguration
 
-### 5. Erste Schritte
+Die Konfiguration liegt in `config.yaml`. Secrets sollten nicht in diese Datei geschrieben werden. Nutze stattdessen `.env` oder echte Umgebungsvariablen.
 
-```bash
-# Review des aktuellen Working Tree
-code-review-agent diff
-
-# Review aus Diff-Datei
-code-review-agent diff changes.diff
-
-# Review zwischen Branches
-code-review-agent branch --target-branch main
-
-# Review eines GitHub PR
-code-review-agent mr --mr-id 42 --provider github
-```
-
----
-
-## 🎮 CLI-Kommandos
-
-### `code-review-agent health`
-
-Prüft, ob Ollama erreichbar ist und das Modell existiert.
-
-### `code-review-agent diff [diff_file]`
-
-Führt ein Review auf einem Diff durch.
-
-| Option | Beschreibung |
-|---|---|
-| `diff_file` | Pfad zur Diff-Datei (optional – sonst Working Tree) |
-| `-o, --output FILE` | JSON-Ergebnis speichern |
-| `-f, --format rich|json|text` | Ausgabeformat |
-| `--min-severity info|warning|error` | Minimale Severity |
-
-### `code-review-agent branch`
-
-Vergleicht zwei Branches und reviewed die Änderungen.
-
-| Option | Beschreibung |
-|---|---|
-| `-t, --target-branch` | Ziel-Branch (default: main) |
-| `-s, --source-branch` | Quell-Branch (default: aktueller) |
-| `-o, --output FILE` | JSON-Ergebnis speichern |
-
-### `code-review-agent mr`
-
-Reviewed einen Pull Request / Merge Request.
-
-| Option | Beschreibung |
-|---|---|
-| `--mr-id` | PR/MR-ID |
-| `--provider github|gitlab` | Git-Provider |
-
-### `code-review-agent webhook`
-
-Startet den Webhook-Server für automatische Reviews.
-
-| Option | Beschreibung |
-|---|---|
-| `-p, --port` | Port (default: 8000) |
-| `--host` | Host (default: 0.0.0.0) |
-
----
-
-## 🌐 Webhook-Server (GitHub / GitLab)
-
-Der Webhook-Server empfängt PR/MR-Events und führt automatisch ein Review durch.
-
-```bash
-# Mit installiertem Agent
-code-review-agent webhook --port 8000
-
-# Oder direkt via Python
-python -m examples.webhook_server
-```
-
-### GitHub Webhook einrichten
-
-```
-Repository → Settings → Webhooks → Add webhook
-Payload URL: http://dein-server:8000/webhook/github
-Content type: application/json
-Secret: (optional, über WEBHOOK_SECRET)
-Events: Pull requests
-```
-
-Umgebungsvariablen:
-```bash
-export GITHUB_TOKEN="ghp_..."
-export WEBHOOK_SECRET="..."   # Optional
-```
-
-### GitLab Webhook einrichten
-
-```
-Project → Settings → Webhooks → Add webhook
-URL: http://dein-server:8000/webhook/gitlab
-Secret Token: (optional, über WEBHOOK_SECRET)
-Trigger: Merge Request Events
-```
-
-Umgebungsvariablen:
-```bash
-export GITLAB_TOKEN="glpat-..."
-export CI_PROJECT_ID="123"    # Optional
-export WEBHOOK_SECRET="..."   # Optional
-```
-
----
-
-## ⚙️ Konfiguration
-
-### `config.yaml`
+### Ollama
 
 ```yaml
 ollama:
+  provider: "ollama"
   base_url: "http://localhost:11434"
   model: "codellama:7b"
-  temperature: 0.2
-  max_tokens: 2048
-  num_ctx: 8192
-
-review:
-  max_diff_lines: 500
-  chunk_size: 200
-  parallel_chunks: 0
-  output_dir: "./reports"
-
-git:
-  remote: "origin"
-  work_dir: "/tmp/code-review-agent"
-
-logging:
-  level: "INFO"
+  temperature: 0.0
+  max_tokens: 300
+  timeout: 120
+  num_ctx: 4096
 ```
 
-### Umgebungsvariablen
+Voraussetzung:
 
-| Variable | Überschreibt |
+```bash
+ollama serve
+ollama pull codellama:7b
+```
+
+### DeepSeek oder andere OpenAI-kompatible APIs
+
+Der aktuelle LLM-Client verzweigt fuer OpenAI-kompatible APIs ueber `provider: "openai"`. DeepSeek wird dabei ueber `api_base_url` genutzt.
+
+```yaml
+ollama:
+  provider: "openai"
+  api_key: ""
+  api_base_url: "https://api.deepseek.com"
+  api_model: "deepseek-chat"
+  temperature: 0.0
+  max_tokens: 300
+```
+
+API-Key per Umgebung:
+
+```bash
+export CRA_API_KEY="..."
+```
+
+oder in `.env`:
+
+```bash
+CRA_API_KEY="..."
+```
+
+`.env` ist in `.gitignore` enthalten und darf nicht committed werden.
+
+## Wichtige Umgebungsvariablen
+
+| Variable | Bedeutung |
 |---|---|
-| `CRA_OLLAMA_BASE_URL` | `ollama.base_url` |
-| `CRA_OLLAMA_MODEL` | `ollama.model` |
-| `CRA_OLLAMA_TEMPERATURE` | `ollama.temperature` |
-| `CRA_REVIEW_MAX_DIFF_LINES` | `review.max_diff_lines` |
-| `CRA_REVIEW_CHUNK_SIZE` | `review.chunk_size` |
-| `CRA_LOG_LEVEL` | `logging.level` |
+| `CRA_LLM_PROVIDER` | `ollama` oder `openai` |
+| `CRA_OLLAMA_BASE_URL` | Ollama-Endpoint |
+| `CRA_OLLAMA_MODEL` | Ollama-Modell |
+| `CRA_API_KEY` | API-Key fuer OpenAI-kompatible Provider |
+| `DEEPSEEK_API_KEY` | Alternative fuer DeepSeek |
+| `OPENAI_API_KEY` | Alternative fuer OpenAI |
+| `CRA_API_BASE_URL` | OpenAI-kompatible Base URL |
+| `CRA_API_MODEL` | Modellname der API |
+| `CRA_REVIEW_MAX_DIFF_LINES` | Schwelle fuer Chunking |
+| `CRA_REVIEW_CHUNK_SIZE` | Zielgroesse pro Chunk |
+| `CRA_LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `GITHUB_TOKEN` | GitHub API-Token |
 | `GITLAB_TOKEN` | GitLab API-Token |
-| `WEBHOOK_SECRET` | Secret für Webhooks |
+| `WEBHOOK_SECRET` | Optionales Webhook-Secret |
 
----
+## CLI
 
-## 📦 Projektstruktur
+### Health Check
 
+```bash
+./code-review-agent health
 ```
-src/
-├── __init__.py          # Package-Init
-├── config.py            # Konfiguration (YAML + Env-Overrides)
-├── main.py              # CLI-Einstiegspunkt (Click + Rich)
-├── llm_client.py        # Ollama-Client (generate, health_check)
-├── diff_analyzer.py     # Diff-Parser (Hunks, Zeilen, Status)
-├── context_retriever.py # Kontext-Helfer (Dateien, Funktionen)
-├── review_prompt.py     # Prompt-Builder für LLM
-├── response_parser.py   # LLM-Output → strukturierte Findings
-├── rule_engine.py       # Regelwerk-Loader und Validator
-├── git_provider.py      # Git-Provider-Abstraktion (ABC)
-├── github_client.py     # GitHub-Integration
-├── gitlab_client.py     # GitLab-Integration
-└── orchestrator.py      # Review-Orchestrator (Hauptlogik)
 
+Prueft den konfigurierten LLM-Provider und gibt die geladene Konfiguration ohne Secret-Werte aus.
+
+### Lokalen Diff reviewen
+
+```bash
+./code-review-agent diff
+```
+
+Ohne Argumente werden unstaged und staged Changes im aktuellen Git-Repository reviewed.
+
+### Diff-Datei reviewen
+
+```bash
+./code-review-agent diff changes.diff
+```
+
+### JSON-Ausgabe speichern
+
+```bash
+./code-review-agent diff --format json --output reports/review.json
+```
+
+### Branches vergleichen
+
+```bash
+./code-review-agent branch --target-branch main
+./code-review-agent branch --target-branch main --source-branch feature/foo
+```
+
+### PR/MR reviewen
+
+```bash
+./code-review-agent mr --mr-id 42 --provider github
+./code-review-agent mr --mr-id 42 --provider gitlab
+```
+
+## Webhook-Server
+
+```bash
+./code-review-agent webhook --port 8000
+```
+
+Endpunkte:
+
+```text
+POST /webhook/github
+POST /webhook/gitlab
+GET  /health
+```
+
+GitHub benoetigt `GITHUB_TOKEN`, GitLab benoetigt `GITLAB_TOKEN`. Optional kann `WEBHOOK_SECRET` gesetzt werden.
+
+## Review-Verhalten
+
+Der Review laeuft pro Datei:
+
+1. Git-Diff wird geparst.
+2. Geaenderte Dateien und Hunks werden strukturiert.
+3. Kontext und betroffene Funktionen werden gesammelt.
+4. Das LLM bekommt Diff, Kontext, erlaubte Kommentarzeilen und Regeln.
+5. Die Antwort wird geparst.
+6. Die Rule Engine validiert und kalibriert Findings.
+
+Die Rule Engine verwirft oder reduziert unter anderem:
+
+- Findings ausserhalb hinzugefuegter Diff-Zeilen
+- Findings fuer nicht geaenderte Dateien
+- doppelte Findings
+- leere oder ungueltige Kategorien/Severities
+- "keine Aenderung noetig"-Pseudo-Findings
+- unsichere Vorschlaege wie `.env` per `source` auszufuehren
+- spekulative `error`-Findings mit Woertern wie "koennte" oder "moeglicherweise"
+- leere Secret-Platzhalter wie `api_key: ""`
+
+## Nicht-Determinismus
+
+LLM-Reviews sind nicht voll deterministisch. Zwei Laeufe ueber denselben Diff koennen unterschiedliche Roh-Findings erzeugen. Das ist besonders sichtbar bei:
+
+- `temperature > 0`
+- knappen `max_tokens`
+- grossen Diffs mit Chunking
+- freien Textantworten statt strikt validiertem JSON
+- Remote-APIs, die keine reproduzierbare Seed-Steuerung anbieten
+
+Fuer stabilere Ergebnisse:
+
+- `temperature: 0.0` setzen
+- `max_tokens` nicht zu knapp waehlen
+- kleinere Diffs reviewen
+- JSON-Ausgaben archivieren
+- wichtige Findings durch Tests oder manuelle Pruefung bestaetigen
+
+## Regeln
+
+Regeln liegen unter `rules/`.
+
+```text
 rules/
-├── default.yaml         # Standard-Regeln (Style, Bugs, Performance)
-└── security.yaml        # Security-Regeln
-
-examples/
-└── webhook_server.py    # FastAPI-Webhook-Server
-
-config.yaml              # Beispiel-Konfiguration
-pyproject.toml           # Package-Definition
-requirements.txt         # Abhängigkeiten
+  default.yaml
+  security.yaml
 ```
 
----
-
-## 🧠 Prompt-Engineering
-
-Das System verwendet **zwei Prompt-Ebenen**:
-
-1. **System-Prompt**: Definiert die Rolle des Senior-Entwicklers, Review-Kriterien und das Antwortformat.
-2. **File-Prompt**: Enthält den konkreten Diff + Kontext (betroffene Funktionen, Umgebungszeilen, relevante Regeln).
-
-Das LLM antwortet im strukturierten Format:
-
-```
-FILE: src/main.py
-LINE: 42
-SEVERITY: error
-CATEGORY: bug
-MESSAGE: Möglicher off-by-one-Fehler in der Schleife
-SUGGESTION:
-for i in range(len(items)):
-```
-
----
-
-## 🔌 Erweiterbarkeit
-
-### Eigenes Regelwerk
-
-Erstelle eine neue YAML-Datei in `rules/`:
+Ein Regelprofil wird in `config.yaml` definiert:
 
 ```yaml
 rules:
-  - id: "MY-001"
-    severity: "warning"
-    category: "style"
-    pattern: "Eigenes Pattern"
-    message: "Eigene Nachricht"
-```
-
-Aktivieren in `config.yaml`:
-
-```yaml
-rules:
+  enabled: true
+  rules_dir: "./rules"
   profiles:
     default:
       - "default.yaml"
       - "security.yaml"
-      - "mein-regelwerk.yaml"
 ```
 
-### Eigener Git-Provider
-
-Implementiere das `GitProvider`-ABC aus `git_provider.py`:
-
-```python
-from src.git_provider import GitProvider, MergeRequest, ReviewComment
-
-class MyCustomProvider(GitProvider):
-    def get_diff(self, mr: MergeRequest) -> str:
-        ...
-    def post_comments(self, mr, comments) -> int:
-        ...
-    def update_status(self, mr, status, description) -> None:
-        ...
-```
-
----
-
-## 📊 CI/CD-Integration
-
-### GitHub Actions
+Regelbeispiel:
 
 ```yaml
-name: Code Review
-on:
-  pull_request:
-    types: [opened, synchronize]
-
-jobs:
-  review:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Ollama starten
-        run: |
-          docker run -d --name ollama -p 11434:11434 ollama/ollama
-          ollama pull codellama:7b
-      - name: Code Review
-        run: |
-          pip install code-review-agent[github]
-          code-review-agent mr --mr-id ${{ github.event.number }} --provider github
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CRA_OLLAMA_BASE_URL: "http://localhost:11434"
+rules:
+  - id: "BUG-001"
+    severity: "error"
+    category: "bug"
+    pattern: "Möglicher off-by-one-Fehler"
+    message: "Überprüfe Schleifen- oder Indexgrenzen."
 ```
 
-### GitLab CI
+## Projektstruktur
 
-```yaml
-code-review:
-  stage: test
-  image: python:3.11
-  only:
-    - merge_requests
-  script:
-    - apt-get update && apt-get install -y curl
-    - curl -fsSL https://ollama.com/install.sh | sh
-    - ollama serve &
-    - ollama pull codellama:7b
-    - pip install code-review-agent[gitlab]
-    - code-review-agent mr --mr-id $CI_MERGE_REQUEST_IID --provider gitlab
-  variables:
-    GITLAB_TOKEN: $CI_JOB_TOKEN
+```text
+src/
+  config.py             Konfiguration aus YAML und Env
+  main.py               CLI mit Click und Rich
+  llm_client.py         Ollama und OpenAI-kompatible API
+  diff_analyzer.py      Git-Diff-Parser
+  context_retriever.py  Kontext aus Repository
+  review_prompt.py      System- und File-Prompts
+  response_parser.py    LLM-Text zu ReviewFinding
+  rule_engine.py        Validierung, Deduplizierung, Severity-Kalibrierung
+  git_provider.py       Provider-Abstraktion
+  github_client.py      GitHub-Integration
+  gitlab_client.py      GitLab-Integration
+  orchestrator.py       Ablaufsteuerung
+
+rules/
+  default.yaml
+  security.yaml
+
+examples/
+  webhook_server.py
+
+config.yaml
+.env.example
+code-review-agent
+pyproject.toml
+requirements.txt
 ```
 
----
+## Bekannte Grenzen
 
-## 📝 Ausgabe-Beispiel
+- Der Agent kann halluzinierte LLM-Findings nicht vollstaendig verhindern.
+- GitHub/GitLab Inline-Kommentare funktionieren nur auf gueltigen Diff-Zeilen.
+- Remote-Kontext ist nur so gut wie der lokale Checkout bzw. Provider-Diff.
+- Grosse Diffs werden gechunked; dadurch fehlt dem LLM eventuell globaler Kontext.
+- Der Providername fuer OpenAI-kompatible APIs ist aktuell `openai`; DeepSeek wird ueber `api_base_url` abgebildet.
+- Der Agent sollte Findings nicht ungeprueft als harte Merge-Blocker verwenden.
 
-```
-📋 Review-Zusammenfassung
-   3 Dateien geändert, 2 modified, 1 added, 45 Einfügungen(+), 12 Löschungen(-)
-   Score: 75/100
-   🔴 Errors:   1
-   🟡 Warnings: 2
-   🔵 Infos:    1
+## Sicherheit
 
-🔴 ERROR | src/auth.py:47
-   Hartcodierte Secrets wurden erkannt. Verwende Umgebungsvariablen.
+- Keine echten API-Keys in `config.yaml`, README oder Commits schreiben.
+- `.env` bleibt lokal und ist ignoriert.
+- `./code-review-agent` fuehrt `.env` nicht als Shell-Code aus.
+- `health` gibt API-Keys redacted aus.
+- Review-Kommentare koennen Codeausschnitte enthalten; bei privaten Repositories Provider und Logs entsprechend schuetzen.
+
+## Beispielausgabe
+
+```text
+Review-Zusammenfassung
+   3 Dateien geändert, 3 modified, 42 Einfügungen(+), 8 Löschungen(-)
+   Score: 94/100
+   Errors:   0
+   Warnings: 1
+   Infos:    1
+
+WARNING | src/main.py:98
+   Diese Zeile nutzt eine potentiell unsichere Operation.
    (security)
-
-🟡 WARNING | src/api.py:23
-   Diese Funktion hat keine Typannotationen.
-   (style)
 ```
 
----
-
-## 🔧 Technologie-Entscheidungen
-
-| Entscheidung | Warum |
-|---|---|
-| **Python** | Einfachste Sprache für Scripting + API-Integration |
-| **Ollama** | Lokales LLM ohne API-Kosten, keine Datenverlassen |
-| **Click + Rich** | CLI-Framework mit漂亮的 Ausgabe |
-| **FastAPI** | Modernes Webhook-Framework, async, auto-docs |
-| **PyGithub** | Vollständige GitHub-API-Abdeckung |
-| **python-gitlab** | Vollständige GitLab-API-Abdeckung |
-| **Pydantic** | Typsichere Konfiguration |
-| **YAML-Regeln** | Einfach erweiterbar ohne Code-Änderungen |
-
----
-
-## 📄 Lizenz
+## Lizenz
 
 MIT
